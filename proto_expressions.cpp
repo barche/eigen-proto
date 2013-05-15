@@ -1,7 +1,5 @@
 #include <boost/proto/proto.hpp>
 
-#include "vector_helpers.hpp"
-
 using namespace boost;
 
 /// Demonstrate some basic proto expression properties
@@ -12,6 +10,9 @@ int main(void)
   
   // We can easily make a terminal out of it, held by reference here
   proto::literal<int&> int_term(i);
+  
+  // or do this in-place
+  proto::display_expr(proto::lit(i));
   
   // We can get the value and change it using proto::value
   proto::value(int_term) = 2;
@@ -38,9 +39,11 @@ int main(void)
   std::cout << "Assignment..." << std::endl;
   proto::display_expr(int_term = 2);
   std::cout << "Function calls, with the first child being our terminal..." << std::endl;
-  proto::display_expr(int_term(1,2,3,4,5,6,7,8,9));
+  proto::display_expr(int_term(1,2));
   // This is one too many, redefine BOOST_PROTO_MAX_ARITY to something higher than 10 for it to work
   //int_term(1,2,3,4,5,6,7,8,9,10);
+
+  proto::display_expr(int_term << "shift" << "things");
   
   return 0;
 }
