@@ -1,3 +1,4 @@
+#include <boost/assert.hpp>
 #include <boost/proto/proto.hpp>
 
 using namespace boost;

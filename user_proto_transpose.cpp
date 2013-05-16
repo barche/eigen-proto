@@ -1,3 +1,4 @@
+#include <boost/assert.hpp>
 #include <boost/proto/proto.hpp>
 #include <Eigen/Dense>
 
@@ -168,7 +169,13 @@ struct do_transpose
   };
 
   template<typename MatrixT>
-  Eigen::Transpose<MatrixT> operator()(const MatrixT& mat)
+  Eigen::Transpose<MatrixT> operator()(MatrixT mat)
+  {
+    return mat.transpose();
+  }
+
+  template<int Rows, int Cols>
+  Eigen::Transpose< Eigen::Matrix<double, Rows, Cols> > operator()(Eigen::Matrix<double, Rows, Cols>& mat)
   {
     return mat.transpose();
   }
@@ -206,7 +213,11 @@ int main(void)
 
   // This is a valid expression
   c_mat.col(0).setConstant(5.);
-  std::cout << eval(transpose(transpose(c))) << std::endl;
+  BOOST_ASSERT(c_mat.transpose() == eval(wrap(transpose(c))));
+  BOOST_ASSERT(c_mat == eval(wrap(transpose(transpose(c)))));
+  BOOST_ASSERT(c_mat.transpose() == eval(wrap(transpose(transpose(transpose(c))))));
+
+  std::cout << eval(wrap(transpose(transpose(transpose(c))))) << std::endl;
 
   return 0;
 }
