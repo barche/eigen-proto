@@ -16,6 +16,7 @@ struct product_value_type
   typedef typename Eigen::MatrixBase<product_type>::PlainObject type;
 };
 
+/// Functor to evaluate a product wrapped to hold its result
 struct do_eigen_multiply : proto::callable
 {
   template<typename Signature>
@@ -35,10 +36,55 @@ struct do_eigen_multiply : proto::callable
   }
 };
 
+/// Placeholder for user-defined operations
+template<typename CallableT>
+struct user_op
+{
+  typedef CallableT callable_t;
+};
+
+/// Primitive transform to evaluate user operations
+struct evaluate_user_op : proto::transform< evaluate_user_op >
+{
+  template<typename ExprT, typename StateT, typename DataT>
+  struct impl : proto::transform_impl<ExprT, StateT, DataT>
+  {
+    // Calculate the type of the functor that the user supplied
+    typedef typename result_of<proto::_child0(ExprT)>::type callable_term_t;
+    typedef typename result_of<proto::_value(callable_term_t)>::type callable_ref_t;
+    typedef typename remove_reference<callable_ref_t>::type::callable_t callable_t;
+
+    // Helper struct to calculate result types
+    template<int I, int dummy = 0>
+    struct compute_result_type;
+
+    // Specialization for 1 argument
+    template<int dummy>
+    struct compute_result_type<1, dummy>
+    {
+      typedef typename result_of<proto::_child1(ExprT)>::type child1_t;
+      typedef typename result_of<callable_t(child1_t)>::type type;
+    };
+
+    // Result type of our user-supplied callable
+    typedef typename compute_result_type<boost::proto::arity_of<ExprT>::value-1>::type result_type;
+
+    result_type operator()(typename impl::expr_param expr, typename impl::state_param state, typename impl::data_param data)
+    {
+      return callable_t()(proto::child_c<1>(expr));
+    }
+  };
+};
+
 /// Simple calculator grammar and transform for any type supporting arithmetic operators
 struct calculator_transform :
   proto::or_
   <
+    proto::when
+    <
+      proto::function< proto::terminal< user_op<proto::_> >, proto::vararg<proto::_> >,
+      evaluate_user_op(proto::function< proto::_, proto::vararg<calculator_transform> >)
+    >,
     proto::when< proto::terminal<proto::_>, proto::_value >, // Replace terminals with their value
     proto::when
     <
@@ -74,6 +120,7 @@ struct stored_result_expression :
   mutable ValueT value;
 };
 
+/// Primitive transform wrapping expressions to hold their value
 struct do_wrap_expression : proto::transform< do_wrap_expression >
 {
   template<typename ExprT, typename StateT, typename DataT>
@@ -109,23 +156,34 @@ struct wrap_expression :
 {
 };
 
-// Print the result type of an expression evaluated with calculator_transform
-template<typename ExprT>
-void print_result_type(const ExprT& expr)
+struct do_transpose
 {
-  result_of<calculator_transform(ExprT)>::type::print_error();
-}
+  template<typename Signature>
+  struct result;
+
+  template<class ThisT, typename MatrixT>
+  struct result<ThisT(MatrixT)>
+  {
+    typedef Eigen::Transpose<MatrixT> type;
+  };
+
+  template<typename MatrixT>
+  Eigen::Transpose<MatrixT> operator()(const MatrixT& mat)
+  {
+    return mat.transpose();
+  }
+
+};
+
+// Create the transpose op
+boost::proto::terminal< user_op<do_transpose> >::type const transpose = {};
 
 }
 
-/// Demonstrate some basic proto expression properties
 int main(void)
 {
+  using namespace boost;
   using namespace eigen_proto;
-  using proto::lit;
-
-  wrap_expression wrap;
-  calculator_transform eval;
 
   // Typedefs for matrix types
   typedef Eigen::Matrix<double, 1, 2> AT;
@@ -142,25 +200,13 @@ int main(void)
   proto::literal<BT&> b(b_mat);
   proto::literal<CT&> c(c_mat);
 
-  const CT expected1 = b_mat*a_mat;
-  const CT result1 = eval(wrap(b*a));
-  std::cout << "First test expected:\n" << expected1 << "\nobtained:\n" << result1 << "\n" << std::endl;
-  BOOST_ASSERT(result1 == expected1);
+  // Transforms to evaluate our expressions
+  wrap_expression wrap;
+  calculator_transform eval;
 
-  const CT expected2 = (b_mat*a_mat)*c_mat;
-
-  proto::display_expr((b*a)*c);
-
-  std::cout << "Second test expected:\n" << expected2 << std::endl;
-  const CT result2 = eval(wrap((b*a)*c));
-  std::cout << "obtained:\n" << result2 << "\n" << std::endl;
-  BOOST_ASSERT(result2 == expected2);
-
-  const CT expected3 = (b_mat*a_mat)*c_mat*(b_mat*a_mat)+c_mat*b_mat*a_mat-(c_mat+c_mat)*b_mat*a_mat;
-  std::cout << "Third test expected:\n" << expected3 << std::endl;
-  const CT result3 = eval(wrap((b*a)*c*(b*a)+c*b*a-(c+c)*b*a));
-  std::cout << "obtained:\n" << result3 << "\n" << std::endl;
-  BOOST_ASSERT(result3 == expected3);
+  // This is a valid expression
+  c_mat.col(0).setConstant(5.);
+  std::cout << eval(transpose(transpose(c))) << std::endl;
 
   return 0;
 }

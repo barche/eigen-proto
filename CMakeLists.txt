@@ -15,3 +15,8 @@ add_executable(proto-grammars proto_grammars.cpp)
 add_executable(proto-transforms proto_transforms.cpp)
 add_executable(eigen-calculator-problem eigen_calculator_problem.cpp)
 add_executable(eigen-calculator-solution eigen_calculator_solution.cpp)
+
+add_executable(user-proto-terminals user_proto_terminals.cpp)
+set_target_properties(user-proto-terminals PROPERTIES COMPILE_FLAGS -std=c++11)
+
+add_executable(user-proto-transpose user_proto_transpose.cpp)
