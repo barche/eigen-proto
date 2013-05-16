@@ -45,7 +45,8 @@ struct user_op
 };
 
 /// Primitive transform to evaluate user operations
-struct evaluate_user_op : proto::transform< evaluate_user_op >
+template<typename GrammarT>
+struct evaluate_user_op : proto::transform< evaluate_user_op<GrammarT> >
 {
   template<typename ExprT, typename StateT, typename DataT>
   struct impl : proto::transform_impl<ExprT, StateT, DataT>
@@ -64,16 +65,8 @@ struct evaluate_user_op : proto::transform< evaluate_user_op >
     struct compute_result_type<1, dummy>
     {
       typedef typename result_of<proto::_child1(ExprT)>::type child1_t;
-      typedef typename result_of<callable_t(child1_t)>::type type;
-    };
-
-    // Specialization for 2 arguments
-    template<int dummy>
-    struct compute_result_type<2, dummy>
-    {
-      typedef typename result_of<proto::_child1(ExprT)>::type child1_t;
-      typedef typename result_of<proto::_child2(ExprT)>::type child2_t;
-      typedef typename result_of<callable_t(child1_t, child2_t)>::type type;
+      typedef typename result_of<proto::_value(child1_t)>::type val1_t;
+      typedef typename result_of<callable_t(val1_t)>::type type;
     };
 
     // Number of function arguments
@@ -90,12 +83,7 @@ struct evaluate_user_op : proto::transform< evaluate_user_op >
     // Dispatch on the number of arguments
     result_type dispatch(mpl::int_<1>, typename impl::expr_param expr)
     {
-      return callable_t()(proto::child_c<1>(expr));
-    }
-
-    result_type dispatch(mpl::int_<2>, typename impl::expr_param expr)
-    {
-      return callable_t()(proto::child_c<1>(expr), proto::child_c<1>(expr));
+      return callable_t()(expr.value, GrammarT()(proto::child_c<1>(expr)));
     }
   };
 };
@@ -104,12 +92,12 @@ struct evaluate_user_op : proto::transform< evaluate_user_op >
 struct calculator_transform :
   proto::or_
   <
+    proto::when< proto::terminal<proto::_>, proto::_value >, // Replace terminals with their value
     proto::when
     <
       proto::function< proto::terminal< user_op<proto::_> >, proto::vararg<proto::_> >,
-      evaluate_user_op(proto::function< proto::_, proto::vararg<calculator_transform> >)
+      evaluate_user_op<calculator_transform>
     >,
-    proto::when< proto::terminal<proto::_>, proto::_value >, // Replace terminals with their value
     proto::when
     <
        proto::multiplies< calculator_transform, calculator_transform >,
@@ -151,7 +139,7 @@ struct do_wrap_expression : proto::transform< do_wrap_expression >
   struct impl : proto::transform_impl<ExprT, StateT, DataT>
   {
     typedef typename result_of<calculator_transform(ExprT, StateT, DataT)>::type result_ref_type;
-    typedef typename remove_reference<result_ref_type>::type value_type;
+    typedef typename  remove_const<typename remove_reference<result_ref_type>::type>::type value_type;
     typedef typename remove_const<typename remove_reference<ExprT>::type>::type expr_val_type;
     typedef stored_result_expression<expr_val_type, value_type> result_type;
 
@@ -175,12 +163,18 @@ struct wrap_expression :
         wrap_expression(proto::_left), wrap_expression(proto::_right)
       ))
     >,
+    proto::when
+    <
+      proto::function< proto::terminal< user_op<proto::_> >, proto::vararg<proto::_> >,
+      do_wrap_expression(proto::function< proto::_, proto::vararg<wrap_expression> >)
+    >,
     proto::nary_expr< proto::_, proto::vararg<wrap_expression> >
   >
 {
 };
 
-struct do_transpose
+// Return a matrix set constant to 2 with the same size as the input
+struct make_twos
 {
   template<typename Signature>
   struct result;
@@ -188,24 +182,18 @@ struct do_transpose
   template<class ThisT, typename MatrixT>
   struct result<ThisT(MatrixT)>
   {
-    typedef Eigen::Transpose<MatrixT> type;
+    typedef MatrixT type;
   };
 
-  template<typename MatrixT>
-  Eigen::Transpose<MatrixT> operator()(MatrixT mat)
+  template<typename StoredT, typename MatrixT>
+  StoredT& operator()(StoredT& stored, const MatrixT&)
   {
-    return mat.transpose();
-  }
-
-  template<int Rows, int Cols>
-  Eigen::Transpose< Eigen::Matrix<double, Rows, Cols> > operator()(Eigen::Matrix<double, Rows, Cols>& mat)
-  {
-    return mat.transpose();
+    stored.setConstant(2.);
+    return stored;
   }
 };
 
-// Create the transpose op
-proto::terminal< user_op<do_transpose> >::type const transpose = {};
+proto::terminal< user_op<make_twos> >::type const twos = {};
 
 }
 
@@ -233,19 +221,9 @@ int main(void)
   wrap_expression wrap;
   calculator_transform eval;
 
-  // This is a valid expression
-  c_mat.col(0).setConstant(5.);
-  BOOST_ASSERT(c_mat.transpose() == eval(wrap(transpose(c))));
-  BOOST_ASSERT(c_mat == eval(wrap(transpose(transpose(c)))));
-  BOOST_ASSERT(c_mat.transpose() == eval(wrap(transpose(transpose(transpose(c))))));
-
-  std::cout << eval(wrap(transpose(transpose(transpose(c))))) << std::endl;
-
-  const CT expected2 = (b_mat*a_mat)*c_mat;
-  std::cout << "expected:\n" << expected2 << std::endl;
-  const CT result2 = eval(wrap((transpose(a)*transpose(b))*c));
-  std::cout << "obtained:\n" << result2 << "\n" << std::endl;
-  BOOST_ASSERT(result2 == expected2);
+  std::cout << eval(wrap(twos(c))) << std::endl;
+  std::cout << eval(wrap(twos(b)*twos(a))) << std::endl;
+  std::cout << eval(wrap((twos(c)+twos(c))*c)) << std::endl; // oops
 
   return 0;
 }
