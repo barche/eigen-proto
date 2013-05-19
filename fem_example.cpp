@@ -152,7 +152,7 @@ struct eval_centroid : proto::callable
   }
 };
 
-/// Return the element coordinates matrix
+/// Return the mapped coordinate referring to the centroid
 proto::terminal< centroid_tag >::type const centroid = {};
 
 struct shape_func_tag {};
@@ -176,7 +176,7 @@ struct eval_shape_func : proto::callable
   }
 };
 
-/// Return the element coordinates matrix
+/// Return the shape function value at the given mapped coordinate
 proto::terminal< shape_func_tag >::type const N = {};
 
 /// Helper for output
