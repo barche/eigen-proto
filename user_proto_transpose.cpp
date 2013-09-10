@@ -153,7 +153,7 @@ struct do_wrap_expression : proto::transform< do_wrap_expression >
     typedef typename result_of<calculator_transform(ExprT, StateT, DataT)>::type result_ref_type;
     typedef typename remove_reference<result_ref_type>::type value_type;
     typedef typename remove_const<typename remove_reference<ExprT>::type>::type expr_val_type;
-    typedef stored_result_expression<expr_val_type, value_type> result_type;
+    typedef const stored_result_expression<expr_val_type, value_type> result_type;
 
     result_type operator()(typename impl::expr_param expr, typename impl::state_param state, typename impl::data_param data)
     {
