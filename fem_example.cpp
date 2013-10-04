@@ -32,12 +32,15 @@ struct mesh_data
 /// 1D Line shape function
 struct line1d
 {
-  static const int nb_nodes = 2;
+  static const int nb_nodes = 2; // Number of nodes
   static const int dimension = 1;
 
+  // Type of the mapped coordinates
   typedef Eigen::Matrix<double, 1, dimension> coord_t;
+  // Type of the shape function vector
   typedef Eigen::Matrix<double, 1, nb_nodes> shape_func_t;
 
+  // Compute the shape function vector at mapped coordinate c
   static shape_func_t shape_function(const coord_t& c)
   {
     const double xi = c[0];
@@ -47,6 +50,7 @@ struct line1d
     return result;
   }
 
+  // Return the mapped coordinate of the centroid
   static const coord_t& centroid()
   {
     static const coord_t c = coord_t::Constant(0.);
@@ -89,14 +93,19 @@ namespace dsl
 template<typename ElementT>
 struct dsl_data
 {
+  // Required by Eigen to store fixed-size data
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  // The concrete element type
   typedef ElementT element_t;
+  // The type of the coordinates for all element nodes
   typedef Eigen::Matrix<double, element_t::nb_nodes, element_t::dimension> coord_mat_t;
 
+  // Construct using the mesh
   dsl_data(const fem::mesh_data& d) : mesh_data(d)
   {
   }
 
+  // Set the current element
   void set_element(const int e)
   {
     for(int i = 0; i != element_t::nb_nodes; ++i)
@@ -104,8 +113,11 @@ struct dsl_data
         coord_mat(i,j) = mesh_data.coordinates[mesh_data.connectivity[e][i]][j];
   }
 
+  // Reference to the mesh
   const fem::mesh_data& mesh_data;
+  // Storage for the coordinates of the current element nodes
   coord_mat_t coord_mat;
+  // Value of the last shape function computation
   typename element_t::shape_func_t shape_func;
 };
 
@@ -159,19 +171,25 @@ struct shape_func_tag {};
 
 struct eval_shape_func : proto::callable
 {
+  // C++ result_of declaration
   template<typename Signature>
   struct result;
 
+  // C++ result_of implementation
   template<class ThisT, typename CoordT, typename DataT>
   struct result<ThisT(CoordT, DataT)>
   {
-    typedef const typename boost::remove_reference<DataT>::type::element_t::shape_func_t& type;
+    typedef const typename
+      boost::remove_reference<DataT>::type::element_t::shape_func_t& type;
   };
 
   template<typename CoordT, typename DataT>
-  const typename DataT::element_t::shape_func_t& operator()(const CoordT& coord, DataT& data) const
+  const typename DataT::element_t::shape_func_t& operator()(const CoordT& coord,
+                                                            DataT& data) const
   {
+    // Evaluate the shape function at the given mapped coordinates
     data.shape_func = DataT::element_t::shape_function(coord);
+    // Return a reference to the result, stored in data
     return data.shape_func;
   }
 };
@@ -182,17 +200,23 @@ proto::terminal< shape_func_tag >::type const N = {};
 /// Helper for output
 proto::terminal< std::ostream & >::type cout_ = { std::cout };
 
-/// Proto grammar
+// Grammar to evaluate the expression:
+// cout_ << N(centroid)*element_coords << "\n"
 struct fem_grammar :
+  // Match the following rules in order:
   proto::or_
   <
+    // Evaluate element_coords using the eval_element_coord transform:
     proto::when<proto::terminal<element_coords_tag>, eval_element_coord(proto::_data)>,
+    // Evaluate centroid using the eval_centroid transform
     proto::when<proto::terminal<centroid_tag>, eval_centroid(proto::_data)>,
+    // Evaluate shape functions using the eval_shape_func transform
     proto::when
     <
       proto::function<proto::terminal<shape_func_tag>, proto::_>,
       eval_shape_func(fem_grammar(proto::_child1), proto::_data)
     >,
+    // On any other expression: perform the default C++ action
     proto::_default<fem_grammar>
   >
 {
