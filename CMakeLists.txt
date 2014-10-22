@@ -21,5 +21,7 @@ set_target_properties(user-proto-terminals PROPERTIES COMPILE_FLAGS -std=c++11)
 
 add_executable(user-proto-transpose user_proto_transpose.cpp)
 add_executable(user-proto-matrix user_proto_matrix.cpp)
-add_executable(fem-example fem_example.cpp)
 add_executable(fem-expressions fem_expressions.cpp)
+add_executable(fem-centroids fem_centroids.cpp)
+add_executable(fem-mass-matrix fem_mass_matrix.cpp)
+add_executable(fem-mass-expressions fem_mass_expressions.cpp)
